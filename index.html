@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1d4e6b">
+<title>Kundalik reja</title>
+<style>
+:root{--bg:#eef3f5;--card:#fff;--ink:#16222b;--mut:#66788a;--ac:#1d4e6b;--ac2:#e4eef3;--ok:#4f8a64;--line:#d6e0e6}
+@media(prefers-color-scheme:dark){:root{--bg:#0f171d;--card:#18232b;--ink:#e8f0f4;--mut:#8da1b0;--ac:#6bb3d6;--ac2:#1f2f3a;--ok:#7bc496;--line:#2a3a46}}
+*{box-sizing:border-box;margin:0}
+html,body{height:100%}
+body{font:16px/1.4 system-ui,sans-serif;background:var(--bg);color:var(--ink);padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);display:flex;flex-direction:column}
+header{padding:16px 18px 8px}
+h1{font-size:22px;font-weight:700}
+#date{color:var(--mut);font-size:14px}
+main{flex:1;overflow-y:auto;padding:8px 14px 90px}
+nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:var(--card);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
+nav button{flex:1;padding:14px;border:0;background:none;color:var(--mut);font:600 15px system-ui}
+nav button.on{color:var(--ac);box-shadow:inset 0 3px 0 var(--ac)}
+.row{display:flex;gap:8px;margin-bottom:10px}
+input,button.b{font:inherit;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:11px}
+input[type=text]{flex:1;min-width:0}
+button.b{background:var(--ac);color:#fff;border:0;font-weight:600;padding:11px 16px}
+button.b.g{background:var(--ac2);color:var(--ac)}
+.item{display:flex;align-items:center;gap:12px;background:var(--card);border-radius:12px;padding:12px;margin-bottom:8px;border:1px solid var(--line)}
+.item .t{flex:1;min-width:0;word-break:break-word}
+.item small{display:block;color:var(--mut)}
+.item.done .t{text-decoration:line-through;opacity:.5}
+.chk{width:26px;height:26px;border-radius:50%;border:2px solid var(--ac);background:none;flex:none;color:#fff;font-size:15px}
+.done .chk{background:var(--ok);border-color:var(--ok)}
+.x{background:none;border:0;color:var(--mut);font-size:20px;padding:4px 8px}
+.empty{color:var(--mut);text-align:center;padding:30px 10px}
+.hide{display:none}
+.now{background:var(--ac2);border-color:var(--ac)}
+#bar{position:fixed;left:0;right:0;bottom:calc(52px + env(safe-area-inset-bottom,0px));background:var(--card);border-top:1px solid var(--line);padding:8px 14px;display:none;align-items:center;gap:10px}
+#bar b{flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:14px}
+#bar audio{display:none}
+#alert{position:fixed;inset:0;background:#000a;display:none;align-items:center;justify-content:center;padding:24px;z-index:5}
+#alert div{background:var(--card);border-radius:16px;padding:22px;width:100%;max-width:340px;text-align:center}
+#alert h2{margin-bottom:6px}#alert p{margin-bottom:16px}
+</style>
+</head>
+<body>
+<header><h1>Kundalik reja</h1><div id="date"></div></header>
+<main>
+ <section id="p1">
+  <div class="row"><input id="tt" type="text" placeholder="Yangi reja..."><input id="tm" type="time"></div>
+  <div class="row"><button class="b" id="add" style="flex:1">Qo'shish</button><button class="b g" id="ntf">Bildirishnoma</button></div>
+  <div id="sch"></div>
+  <div id="list"></div>
+ </section>
+ <section id="p2" class="hide">
+  <div class="row"><button class="b" id="pick" style="flex:1">Qo'shiq qo'shish</button><button class="b g" id="shuf">Aralash</button></div>
+  <input id="file" type="file" accept="audio/*" multiple class="hide">
+  <div id="songs"></div>
+ </section>
+</main>
+<div id="bar"><b id="np"></b><button class="b g" id="prev">⏮</button><button class="b" id="pp">▶</button><button class="b g" id="next">⏭</button><audio id="au"></audio></div>
+<nav><button id="n1" class="on">Rejalar</button><button id="n2">Musiqa</button></nav>
+<div id="alert"><div><h2>⏰ Eslatma</h2><p id="atxt"></p><button class="b" id="aok">Xo'p</button></div></div>
+
+<script>
+const $=id=>document.getElementById(id);
+let tasks=[];try{tasks=JSON.parse(localStorage.getItem('tasks')||'[]')}catch(e){}
+const save=()=>{try{localStorage.setItem('tasks',JSON.stringify(tasks))}catch(e){}};
+const today=()=>new Date().toISOString().slice(0,10);
+$('date').textContent=new Date().toLocaleDateString('uz-UZ',{weekday:'long',day:'numeric',month:'long'});
+
+/* ---- Haftalik jadval (1=Du ... 6=Sh, 0=Ya) [kunlar, vaqt, nom, necha daqiqa oldin eslatish] ---- */
+const SCH=[
+ [[1,2,3,4,5],'07:00','Uyg\'onish, nonushta',null],
+ [[6,0],'08:00','Uyg\'onish',null],
+ [[1,3,5],'08:30','Yapon tili',10],
+ [[1,3,5],'09:30','Loyihalar (ilova, sayt)',null],
+ [[1,3,5],'12:30','Tushlik, dam',null],
+ [[1,3,5],'14:00','Tarix darsi',30],
+ [[1,3,5],'16:00','Arab tili darsi',30],
+ [[1,3,5],'18:00','Arab va tarixni takrorlash',5],
+ [[2,4],'08:30','Yapon tili (chuqur dars)',10],
+ [[2,4],'10:30','Loyihalar',null],
+ [[2,4],'15:00','Tarix imtihoniga tayyorgarlik',10],
+ [[2,4],'17:00','Arab tili uy vazifasi',10],
+ [[1,2,3,4,5],'20:00','Yapon tili takrori',5],
+ [[1,2,3,4,5],'22:30','Uxlash vaqti',15],
+ [[6],'09:00','Yapon tili: haftalik takror va test',10],
+ [[0],'18:00','Yengil takror (30 daqiqa)',5],
+ [[0],'22:30','Uxlash vaqti (ertaga dushanba)',15]
+];
+const toMin=s=>+s.slice(0,2)*60+ +s.slice(3);
+const fmt=m=>String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');
+let sf={};try{sf=JSON.parse(localStorage.getItem('sf')||'{}')}catch(e){}
+function drawSch(){
+ const d=new Date().getDay(),el=$('sch');el.innerHTML='';
+ const todays=SCH.filter(s=>s[0].includes(d)).sort((a,b)=>a[1].localeCompare(b[1]));
+ if(!todays.length)return;
+ const h=document.createElement('div');h.className='empty';h.style.padding='4px 0 8px';h.textContent='Bugungi jadval';el.appendChild(h);
+ const nowM=new Date().getHours()*60+new Date().getMinutes();
+ todays.forEach(s=>{
+  const x=document.createElement('div');x.className='item'+(Math.abs(toMin(s[1])-nowM)<=30?' now':'');
+  x.innerHTML='<div class="t"></div>';x.firstChild.textContent=s[2];
+  const m=document.createElement('small');m.textContent='🗓 '+s[1]+(s[3]===null?'':' · '+s[3]+' daqiqa oldin eslatadi');x.firstChild.appendChild(m);
+  el.appendChild(x);
+ });
+}
+
+/* ---- Rejalar ---- */
+function render(){
+ const l=$('list');l.innerHTML='';
+ const s=[...tasks].sort((a,b)=>(a.done-b.done)||(a.time||'99').localeCompare(b.time||'99'));
+ if(!s.length){l.innerHTML='<div class="empty">Hozircha reja yo\'q. Birinchisini qo\'shing.</div>';return}
+ s.forEach(t=>{
+  const d=document.createElement('div');d.className='item'+(t.done?' done':'');
+  const c=document.createElement('button');c.className='chk';c.textContent=t.done?'✓':'';
+  c.onclick=()=>{t.done=!t.done;save();render()};
+  const x=document.createElement('div');x.className='t';x.textContent=t.text;
+  if(t.time){const m=document.createElement('small');m.textContent='⏰ '+t.time;x.appendChild(m)}
+  const r=document.createElement('button');r.className='x';r.textContent='✕';
+  r.onclick=()=>{tasks=tasks.filter(z=>z!==t);save();render()};
+  d.append(c,x,r);l.appendChild(d);
+ });
+}
+$('add').onclick=()=>{
+ const v=$('tt').value.trim();if(!v)return;
+ tasks.push({id:Date.now(),text:v,time:$('tm').value,done:false,fired:''});
+ $('tt').value='';$('tm').value='';save();render();
+};
+$('tt').onkeydown=e=>{if(e.key==='Enter')$('add').click()};
+$('ntf').onclick=async()=>{
+ if(!('Notification' in window)){alert('Bu brauzer bildirishnomani qo\'llamaydi');return}
+ const p=await Notification.requestPermission();
+ $('ntf').textContent=p==='granted'?'Bildirishnoma yoqilgan ✓':'Bildirishnoma ruxsat berilmadi';
+};
+
+/* ---- Eslatma tekshiruvi (har 15 soniyada) ---- */
+function beep(){try{const a=new (window.AudioContext||window.webkitAudioContext)();
+ [0,.3,.6].forEach(o=>{const s=a.createOscillator(),g=a.createGain();s.connect(g);g.connect(a.destination);s.frequency.value=880;g.gain.value=.2;s.start(a.currentTime+o);s.stop(a.currentTime+o+.18)})}catch(e){}}
+function fire(t){
+ beep();if(navigator.vibrate)navigator.vibrate([300,150,300,150,300]);
+ try{if(Notification.permission==='granted')new Notification('Eslatma',{body:t.text})}catch(e){}
+ $('atxt').textContent=t.text+' ('+t.time+')';$('alert').style.display='flex';
+}
+$('aok').onclick=()=>{$('alert').style.display='none'};
+function tick(){
+ const n=new Date(),hm=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0'),k=today()+' '+hm;
+ tasks.forEach(t=>{if(t.time&&!t.done&&t.time===hm&&t.fired!==k){t.fired=k;save();fire(t)}});
+ const day=n.getDay(),nm=n.getHours()*60+n.getMinutes();
+ SCH.forEach((s,i)=>{
+  if(!s[0].includes(day)||s[3]===null)return;
+  const at=toMin(s[1])-s[3],key=today()+'#'+i;
+  if(nm>=at&&nm<=at+2&&!sf[key]){
+   sf[key]=1;try{localStorage.setItem('sf',JSON.stringify(sf))}catch(e){}
+   fire({text:(s[3]?s[3]+' daqiqadan keyin: ':'')+s[2],time:s[1]});
+  }
+ });
+}
+setInterval(tick,15000);document.addEventListener('visibilitychange',tick);
+
+/* ---- Musiqa (IndexedDB — offline saqlanadi) ---- */
+let db,songs=[],cur=-1;const au=$('au');
+const req=indexedDB.open('reja',1);
+req.onupgradeneeded=()=>req.result.createObjectStore('songs',{keyPath:'id'});
+req.onsuccess=()=>{db=req.result;loadSongs()};
+function loadSongs(){
+ const r=db.transaction('songs').objectStore('songs').getAll();
+ r.onsuccess=()=>{songs=r.result.sort((a,b)=>a.id-b.id);drawSongs()};
+}
+function drawSongs(){
+ const l=$('songs');l.innerHTML='';
+ if(!songs.length){l.innerHTML='<div class="empty">Telefondan qo\'shiqlarni tanlang — ular ilovada saqlanadi va internetsiz ham ishlaydi.</div>';return}
+ songs.forEach((s,i)=>{
+  const d=document.createElement('div');d.className='item'+(i===cur?' now':'');
+  const t=document.createElement('div');t.className='t';t.textContent=s.name;t.onclick=()=>play(i);
+  const r=document.createElement('button');r.className='x';r.textContent='✕';
+  r.onclick=()=>{db.transaction('songs','readwrite').objectStore('songs').delete(s.id).onsuccess=()=>{if(i===cur){au.pause();cur=-1;$('bar').style.display='none'}loadSongs()}};
+  d.append(t,r);l.appendChild(d);
+ });
+}
+$('pick').onclick=()=>$('file').click();
+$('file').onchange=e=>{
+ const tx=db.transaction('songs','readwrite'),st=tx.objectStore('songs');let i=0;
+ for(const f of e.target.files)st.put({id:Date.now()+(i++),name:f.name.replace(/\.[^.]+$/,''),blob:f});
+ tx.oncomplete=()=>{loadSongs();e.target.value=''};
+};
+let url=null;
+function play(i){
+ if(!songs.length)return;cur=(i+songs.length)%songs.length;
+ if(url)URL.revokeObjectURL(url);url=URL.createObjectURL(songs[cur].blob);
+ au.src=url;au.play();$('bar').style.display='flex';$('np').textContent=songs[cur].name;drawSongs();
+ if('mediaSession' in navigator){
+  navigator.mediaSession.metadata=new MediaMetadata({title:songs[cur].name,artist:'Kundalik reja'});
+  navigator.mediaSession.setActionHandler('nexttrack',()=>play(cur+1));
+  navigator.mediaSession.setActionHandler('previoustrack',()=>play(cur-1));
+  navigator.mediaSession.setActionHandler('play',()=>au.play());
+  navigator.mediaSession.setActionHandler('pause',()=>au.pause());
+ }
+}
+au.onended=()=>play(cur+1);
+au.onplay=()=>$('pp').textContent='⏸';au.onpause=()=>$('pp').textContent='▶';
+$('pp').onclick=()=>au.paused?au.play():au.pause();
+$('next').onclick=()=>play(cur+1);$('prev').onclick=()=>play(cur-1);
+$('shuf').onclick=()=>play(Math.floor(Math.random()*songs.length));
+
+/* ---- Tablar ---- */
+function tab(n){$('p1').classList.toggle('hide',n!==1);$('p2').classList.toggle('hide',n!==2);$('n1').classList.toggle('on',n===1);$('n2').classList.toggle('on',n===2)}
+$('n1').onclick=()=>tab(1);$('n2').onclick=()=>tab(2);
+render();drawSch();tick();setInterval(drawSch,60000);
+</script>
+</body>
+</html>
